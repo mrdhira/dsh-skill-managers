@@ -1,0 +1,7 @@
+# The skills-manager bundle's one Loader row.
+#
+# The plugin has no configuration: the page reads the skill catalog through the
+# existing `skills/list` Remote, which the host already serves.
+- insert:
+    - id: skills-manager
+      name: dsh-skill-managers

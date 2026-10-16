@@ -1,0 +1,64 @@
+{
+  "name": "dsh-skill-managers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A Skills page for the DSH Web GUI: browse every skill DSH can see — global (~/.dsh), bundled, and per workspace — with one host-half provider that scans the roots a session-addressed catalog cannot reach.",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/v1/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/v1/index.js"
+    },
+    "./host": {
+      "default": "./lib/v1/index.js"
+    },
+    "./client": {
+      "default": "./lib/v1/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "src/**/*.ts",
+    "src/**/*.cts",
+    "types/**/*.d.ts",
+    "build.mjs",
+    "tsconfig.json",
+    "tsconfig.dynamic.json",
+    "scripts/**/*.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "guard": "node scripts/guard.mjs",
+    "test": "node scripts/guard.mjs --limit-mb 1024 -- node --max-old-space-size=384 --test --test-isolation=none --test-timeout=20000 --test-force-exit \"test/*.test.mjs\" \"test/*.test.js\"",
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.dynamic.json --noEmit",
+    "pretest": "npm run build",
+    "prepare": "node build.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^7.0.2"
+  }
+}

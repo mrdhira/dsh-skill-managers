@@ -44,12 +44,21 @@ REPORT   changed / why / evidence / unverified.
 - **Cap every `node` run through the guard.** `scripts/guard.mjs` is a byte-identical copy of the
   canonical `~/.dsh/scripts/guard/guard.mjs`. Run the suite through `pnpm test`, which carries the
   cap. **Exit 124 means the cap was hit — bisect, never raise it.** One run at a time.
+- **Tests are TypeScript, and typechecked.** `test/**/*.ts`, and `tsconfig.test.json` is wired into
+  `pnpm typecheck` — three projects, not two. A test file that no project includes is unchecked
+  prose: that was true here for 764 lines of `.js` tests, and `tsconfig.test.json` existed the whole
+  time without being invoked.
 - **Tests import built artifacts.** `lib/**` is generated and gitignored; `pnpm test` builds first via
-  `pretest`, and `prepare` builds on install so a fresh clone is runnable at all.
+  `pretest`, and `prepare` builds on install so a fresh clone is runnable at all. `test/build.test.ts`
+  fails if an artifact is missing or predates its source.
 - **`lib/**` is never hand-edited.** Authored in TypeScript, built with esbuild.
+- **The browser half is `strict: true`.** Its old `strict: false, noImplicitAny: false` was vestigial;
+  the half is strict-clean. Do not relax it to land a change.
 - **A client half is not done until the slot inspector says `active: true`.**
 - **Client change → toggle the bundle. Host change → restart the app.** A page reload does neither.
 - **Never assert on a DOM node.** Compare primitives (`assert.ok(node === null)`).
+- **Prove a new test is not vacuous.** Mutation-probe it: break the rule it pins, watch *that* test
+  fail, restore, rebuild. A gate never seen failing is not a gate.
 
 ## Names — one identity, five places
 

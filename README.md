@@ -187,16 +187,18 @@ session remains only as transport.
 ```bash
 pnpm install        # deps + build (prepare)
 pnpm build          # src/** -> lib/v1/**
-pnpm typecheck      # host, then browser half
-pnpm test           # builds first, then runs every test (21 tests)
+pnpm typecheck      # three projects: host, browser half, tests
+pnpm test           # builds first, then runs the suite (25 tests)
 ```
 
 ```
 src/host/index.ts     the global skill provider that scans the discovery roots -> lib/v1/index.js
 src/client/index.cts  sidebar entry, page, categories, catalog fetch          -> lib/v1/client.js
 types/dsh.d.ts        observed (not published) DSH contract declarations
-test/host.test.mjs    provider coverage against real temp trees
-test/client.test.js   jsdom + React coverage of the page
+test/host.test.ts     provider coverage against real temp trees
+test/client.test.ts   jsdom + React coverage of the page
+test/harness.ts       the shared jsdom realm and mount helpers
+test/build.test.ts    the freshness gate: artifacts exist, mirror src, are not stale
 build.mjs             esbuild: host ESM unbundled, client CJS + loader handshake
 cordis.patch.yml      the one Loader row the bundle contributes
 ```

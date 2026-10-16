@@ -5,11 +5,9 @@
     "types": ["node"],
     "allowImportingTsExtensions": true,
     "allowJs": true,
-    "checkJs": false,
     "noEmit": true
   },
   "include": [
-    "test/**/*.mjs",
-    "test/**/*.js"
+    "test/**/*.ts"
   ]
 }

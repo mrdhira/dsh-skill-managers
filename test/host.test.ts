@@ -9,6 +9,9 @@
  * The provider contract is checked against the same rules the shipped registry enforces
  * (`@deepseek-ai/dsh-skill`): kebab-case names, a non-empty description, a valid
  * invocation policy, a numeric rank, and `candidate.provider === provider.name`.
+ *
+ * The imported module is the **built** artifact, not `src/**`: the suite has to validate
+ * the bytes that ship (see `build.test.ts` for the freshness gate that makes that true).
  */
 
 import test from 'node:test';
@@ -21,26 +24,73 @@ const HOST = await import('../lib/v1/index.js');
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** One skill candidate, as the provider yields it. Observed from the registry contract. */
+interface Candidate {
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse?: string;
+  readonly invocation: { readonly modelInvocable: boolean; readonly userInvocable: boolean };
+  readonly source: string;
+  readonly provider: string;
+  readonly rank: number;
+  readonly path: string;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+/** A resolved skill definition, as `provider.get()` returns it. */
+interface SkillDefinition {
+  readonly content: string;
+  readonly description: string;
+}
+
+/** The provider the host half registers, limited to what these tests exercise. */
+interface Provider {
+  readonly name: string;
+  list(): Promise<{ candidates: Candidate[]; complete: boolean }>;
+  get(candidate: Candidate, options: { signal?: AbortSignal }): Promise<SkillDefinition>;
+}
+
+/** A workspace registration, as `workspaceRegistry.list()` returns it. */
+interface WorkspaceRegistration {
+  readonly id: string;
+  readonly path: string;
+  readonly title: string;
+}
+
+/** The temp tree a test scans, plus the helpers that populate it. */
+interface TempRoot {
+  readonly home: string;
+  readonly root: string;
+  skill(name: string, frontmatter: string): string;
+  cleanup(): void;
+}
+
+/** Options accepted by {@link provider}. */
+interface ProviderOptions {
+  readonly dshHome: string;
+  readonly workspaces?: readonly WorkspaceRegistration[];
+}
+
 /**
  * A temp home laid out as DSH expects: `<home>/skills/<name>/SKILL.md`.
  *
  * `root` is the *skills* directory itself, which is what assertions reference; `home`
  * is what `DSH_HOME` is set to.
  */
-function makeRoot() {
+function makeRoot(): TempRoot {
   const home = mkdtempSync(join(tmpdir(), 'skm-roots-'));
   const root = join(home, 'skills');
   mkdirSync(root, { recursive: true });
   return {
     home,
     root,
-    skill(name, frontmatter) {
+    skill(name: string, frontmatter: string): string {
       const dir = join(root, name);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'SKILL.md'), frontmatter);
       return dir;
     },
-    cleanup() {
+    cleanup(): void {
       rmSync(home, { recursive: true, force: true });
     },
   };
@@ -49,18 +99,20 @@ function makeRoot() {
 /**
  * Install the host half's provider against a fake context and return the provider object.
  *
- * @param options.dshHome - directory used as `$DSH_HOME` for the scan.
- * @param options.workspaces - workspace registrations the registry returns.
+ * @param options - `dshHome` is the directory used as `$DSH_HOME` for the scan;
+ *   `workspaces` are the registrations the registry returns.
+ * @returns the single provider the host half registered.
  */
-function provider(options) {
-  const captured = [];
+function provider(options: ProviderOptions): Provider {
+  const captured: Provider[] = [];
   const ctx = {
-    get: (name) => (name === 'workspaceRegistry' ? { list: () => options.workspaces ?? [] } : undefined),
-    inject: (deps, run) => {
+    get: (name: string): unknown =>
+      name === 'workspaceRegistry' ? { list: () => options.workspaces ?? [] } : undefined,
+    inject: (deps: readonly string[], run: (child: unknown) => void): void => {
       assert.deepEqual(deps, ['skills'], 'host half waits for the skills service');
       run({
         skills: {
-          registerProvider: (create) => {
+          registerProvider: (create: () => Provider): (() => void) => {
             captured.push(create());
             return () => {};
           },
@@ -121,10 +173,12 @@ test('scans the global root and returns registry-valid candidates', async () => 
     }
 
     const userOnly = result.candidates.find((candidate) => candidate.name === 'user-only');
+    assert.ok(userOnly !== undefined, 'the model-invisible skill was found');
     assert.equal(userOnly.invocation.modelInvocable, false, 'disable-model-invocation is honoured');
     assert.equal(userOnly.invocation.userInvocable, true, 'a model-invisible skill stays user-invocable');
 
     const withWhen = result.candidates.find((candidate) => candidate.name === 'with-when');
+    assert.ok(withWhen !== undefined, 'the when-to-use skill was found');
     assert.equal(withWhen.whenToUse, 'Use when testing.', 'whenToUse is carried through');
   } finally {
     tree.cleanup();
@@ -188,11 +242,14 @@ test('project roots are scanned for every registered workspace', async () => {
     const byName = new Map(result.candidates.map((candidate) => [candidate.name, candidate]));
     assert.deepEqual([...byName.keys()].sort(), ['global-one', 'project-one']);
 
-    assert.equal(byName.get('global-one').source, 'user-dsh', 'the global root reports user-dsh');
-    assert.equal(byName.get('global-one').rank, 400, 'the global root keeps rank 400');
-    assert.equal(byName.get('project-one').source, 'project-dsh', 'a workspace root reports project-dsh');
-    assert.equal(byName.get('project-one').rank, 100, 'a workspace root outranks the global root');
-    assert.equal(byName.get('project-one').metadata.workspacePath, workspacePath, 'the workspace is recorded');
+    const globalOne = byName.get('global-one');
+    const projectOne = byName.get('project-one');
+    assert.ok(globalOne !== undefined && projectOne !== undefined, 'both roots were scanned');
+    assert.equal(globalOne.source, 'user-dsh', 'the global root reports user-dsh');
+    assert.equal(globalOne.rank, 400, 'the global root keeps rank 400');
+    assert.equal(projectOne.source, 'project-dsh', 'a workspace root reports project-dsh');
+    assert.equal(projectOne.rank, 100, 'a workspace root outranks the global root');
+    assert.equal(projectOne.metadata?.workspacePath, workspacePath, 'the workspace is recorded');
   } finally {
     tree.cleanup();
     workspaceHome.cleanup();
@@ -205,6 +262,7 @@ test('get() returns the instruction body without frontmatter', async () => {
     tree.skill('caveman', '---\nname: caveman\ndescription: Terse caveman voice.\n---\n\nAnswer first.\n');
     const scan = provider({ dshHome: tree.home });
     const [candidate] = (await scan.list()).candidates;
+    assert.ok(candidate !== undefined, 'the scan found the one skill');
 
     const definition = await scan.get(candidate, {});
     assert.equal(definition.content, 'Answer first.\n', 'frontmatter is stripped from the body');

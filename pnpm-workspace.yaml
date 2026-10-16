@@ -1,0 +1,6 @@
+# pnpm 11 blocks dependency build scripts by default. esbuild's postinstall links
+# its platform binary, and the build (`node build.mjs`) needs it, so it is allowed
+# by name rather than blanket-approved. Without this, `pnpm run …` and `pnpm test`
+# exit 1 on a fresh clone with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  esbuild: true

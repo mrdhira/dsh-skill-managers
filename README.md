@@ -249,6 +249,71 @@ change must pass: build, typecheck across three projects, and the suite.
 
 Issues and pull requests are welcome.
 
+## What it looks like
+
+The page as it opens, at the width the app actually gives it: DSH's own `computeColumns()` resolves a
+1440×900 window to a 280px sidebar and a **1160px** centre column, and that is the canvas below. The
+page then centres its own 900px column inside it. Every colour is one of the app's theme tokens.
+
+| light | dark |
+|---|---|
+| ![The Skills page in the light theme](docs/screenshots/page-light.png) | ![The Skills page in the dark theme](docs/screenshots/page-dark.png) |
+
+The same page after a real click on **Global** and on a skill's **show path** toggle — the filtered
+view and the expanded row, rendered by the component rather than staged for the shot.
+
+| light | dark |
+|---|---|
+| ![The Global tab with an expanded path, light theme](docs/screenshots/page-global-light.png) | ![The Global tab with an expanded path, dark theme](docs/screenshots/page-global-dark.png) |
+
+All four come from `scripts/capture-panel.mts`, which renders the **real** bundle through
+`test/harness.ts` — the same path `test/client.test.ts` takes, including its fake `skills` Remote —
+injects the **real** stylesheet the bundle itself ships, and resolves the `--dsw-*` tokens out of the
+installed `app.asar`. Nothing is mocked and no colour is hand-picked. Run it with:
+
+```bash
+node ~/.dsh/scripts/guard/guard.mjs --limit-mb 2560 -- \
+  node --max-old-space-size=384 scripts/capture-panel.mts
+```
+
+## The discovery flow
+
+The table under [Configure](#configure) is the ranking; this is the path a skill takes to reach the
+page. It is worth a diagram because there genuinely are two entry points — this plugin's global
+provider and the app's own bundled ones — and because "which root wins" is a question the page's
+`Global` / `Workspaces` tabs are the visible half of.
+
+```mermaid
+flowchart TD
+  subgraph scan["the global provider this plugin registers"]
+    A["workspace .dsh/skills<br/>rank 100 · project-dsh"]
+    B["workspace .agents/skills<br/>rank 200 · project-agents"]
+    C["~/.dsh/skills<br/>rank 400 · user-dsh"]
+    D["~/.agents/skills<br/>rank 500 · user-agents"]
+  end
+  E["the app's own providers<br/>bundled Office · plugin skills.register"]
+  A --> M["candidates merged at the global layer"]
+  B --> M
+  C --> M
+  D --> M
+  E --> M
+  M --> N["skills/list for the session"]
+  N --> O{"retained session?<br/>else newest ordinary one"}
+  O --> P["All · Global · Workspaces<br/>origin derived from the path"]
+```
+
+- **A cold session now sees the same catalog as a live one.** The catalog read falls back to the
+  global layer, and this provider is registered there, so the four pathless entries the page used to
+  show are joined by everything on disk. The session is only transport.
+- **Workspaces are read live** from the `workspaceRegistry`, so a workspace added in the app appears
+  with no code change and no restart; each contributes both of its roots at ranks 100 and 200.
+- **Project beats user on a duplicate name.** The ranks mirror
+  `@deepseek-ai/dsh-skill-filesystem` so a name resolves here the same way it does inside a preset.
+- **Bundled skills never enter this scan.** They arrive from the app's own global providers, which is
+  why a skill with no path is labelled `bundled` rather than treated as an error.
+- **Origins are derived, not reported.** `skills/list` strips `source` and `provider`, so the page
+  classifies by path — see [Origins](#origins).
+
 ## LICENSE
 
 [MIT](LICENSE) © Dhira Wigata

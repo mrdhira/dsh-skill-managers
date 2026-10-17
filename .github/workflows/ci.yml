@@ -33,7 +33,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (three projects: host, browser half, tests)
+      - name: "Typecheck (three projects: host, browser half, tests)"
         run: pnpm run typecheck
 
       - name: Test
